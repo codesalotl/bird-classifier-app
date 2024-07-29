@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="shorcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+
+<body>
+    <h1>BirdClassficationApp</h1>
+    <input type="file" id="imageUpload" accept="image/*">
+    <div id="result"></div>
+
+    <script>
+        // Define the class labels manually
+        const classLabels = [
+            'class_1', 'class_2', 'class_3', 'class_4',
+            'class_5', 'class_6', 'class_7', 'class_8',
+            'class_9', 'class_10', 'class_11', 'class_12',
+            'class_13', 'class_14', 'class_15', 'class_16'
+        ];
+
+        // Load the model
+        let model;
+        tf.loadLayersModel('bird-model-2.15.0_tfjs/model.json').then(m => {
+            model = m;
+            document.getElementById('result').innerText = "Model loaded successfully!";
+        }).catch(error => {
+            document.getElementById('result').innerText = `Error loading model: ${error}`;
+        });
+
+        // Function to resize the image using a canvas
+        function resizeImage(img, maxWidth, maxHeight) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth || height > maxHeight) {
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round((height *= maxWidth / width));
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round((width *= maxHeight / height));
+                        height = maxHeight;
+                    }
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            console.log("Resized successfully!");
+            return canvas;
+        }
+
+        // Function to load and preprocess the image
+        async function prepareImage(file) {
+            const img = await loadImage(file);
+            const resizedCanvas = resizeImage(img, 800, 800); // Resize to a maximum of 800x800
+            const tensor = tf.browser.fromPixels(resizedCanvas)
+                .resizeNearestNeighbor([224, 224])
+                .toFloat()
+                .div(tf.scalar(255.0))
+                .expandDims();
+            return tensor;
+        }
+
+        // Function to load image from file input
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const img = new Image();
+                    img.src = reader.result;
+                    img.onload = () => resolve(img);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Handle file input change
+        document.getElementById('imageUpload').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const preparedImage = await prepareImage(file);
+
+            // Make predictions
+            const predictions = model.predict(preparedImage);
+            const predictedClass = predictions.argMax(1).dataSync()[0];  // Get the index of the highest probability class
+            const confidence = predictions.dataSync()[predictedClass];  // Get the probability of the predicted class
+
+            // Get the predicted label
+            const predictedLabel = classLabels[predictedClass];
+            document.getElementById('result').innerText = `Predicted class index: ${predictedClass}\nPredicted label: ${predictedLabel}\nConfidence: ${confidence.toFixed(2)}`;
+        });
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js');
+        }
+    </script>
+</body>
+
+</html>
